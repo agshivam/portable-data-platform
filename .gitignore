@@ -1,0 +1,7 @@
+data/
+dbt/target/
+dbt/logs/
+__pycache__/
+.terraform/
+*.tfstate*
+*.p8

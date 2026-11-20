@@ -1,0 +1,31 @@
+name: daily-snowflake
+# Runs the SAME dbt project on Snowflake every day and records the result.
+# Needs these repository secrets (see HOW_TO_RUN.md): SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PRIVATE_KEY (PEM text).
+on:
+  schedule: [{cron: "0 3 * * *"}]
+  workflow_dispatch:
+permissions: {contents: write}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    if: ${{ vars.SNOWFLAKE_ENABLED == 'true' }}   # off until you set this repository variable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r requirements-dev.txt dbt-snowflake
+      - name: Write key
+        run: echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > "$RUNNER_TEMP/key.p8"
+      - name: dbt build on Snowflake
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+        run: |
+          export SNOWFLAKE_PRIVATE_KEY_PATH="$RUNNER_TEMP/key.p8"
+          cd dbt && dbt build --target snowflake --profiles-dir .
+      - run: python scripts/record_run.py snowflake
+      - name: Commit run history
+        run: |
+          git config user.name "platform-bot"; git config user.email "bot@users.noreply.github.com"
+          git add app_data/run_history.parquet
+          git diff --cached --quiet || (git commit -m "Record Snowflake run" && git push)
