@@ -1,0 +1,26 @@
+name: keep-awake
+# Free Streamlit apps sleep after about 12 hours without a visit. This opens the app in a real browser twice a day
+# and clicks "Yes, get this app back up" if it is asleep, so a recruiter never meets the sleep screen.
+on:
+  schedule: [{cron: "0 4,16 * * *"}]
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install playwright && playwright install --with-deps chromium
+      - name: Visit the app
+        run: |
+          python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          URL = "https://app-portable-data-platform.streamlit.app/"
+          with sync_playwright() as p:
+              b = p.chromium.launch(); page = b.new_page()
+              page.goto(URL, timeout=60000)
+              btn = page.get_by_role("button", name="Yes, get this app back up!")
+              if btn.count():
+                  btn.click(); print("app was asleep, woke it")
+              page.wait_for_timeout(15000)
+              print("visited", URL, "title:", page.title())
+              b.close()
+          PY
